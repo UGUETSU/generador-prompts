@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Generador de prompts para documentación técnica</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Plan: herramienta de oficina técnica. Formulario a la izquierda, prompt en vivo a la derecha (una columna en celular).
+   Paleta de plano: tinta azul de plano, papel claro, acento ocre de estaca topográfica. */
+:root{
+  --ink:#16324a;      /* texto y títulos */
+  --paper:#f4f6f5;    /* fondo */
+  --sheet:#ffffff;    /* tarjetas */
+  --line:#d3dade;     /* bordes */
+  --muted:#5b6b78;    /* texto secundario */
+  --accent:#b8741a;   /* ocre: acciones */
+  --accent-ink:#ffffff;
+  --code-bg:#f7f8f6;
+  --ok:#2f7d4f;
+  --display:"Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body:"IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+  --mono:"IBM Plex Mono", Consolas, "Courier New", monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ink:#e3ebf1; --paper:#0f1a23; --sheet:#152330; --line:#2a3b49; --muted:#97a8b5;
+    --accent:#e09a3c; --accent-ink:#1a1206; --code-bg:#0f1c27; --ok:#5cc28a; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#e3ebf1; --paper:#0f1a23; --sheet:#152330; --line:#2a3b49; --muted:#97a8b5;
+  --accent:#e09a3c; --accent-ink:#1a1206; --code-bg:#0f1c27; --ok:#5cc28a; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
+header{padding:28px 20px 8px;max-width:1240px;margin:0 auto}
+h1{font-family:var(--display);font-weight:700;font-size:clamp(22px,3vw,30px);margin:0 0 6px;text-wrap:balance;letter-spacing:-.01em}
+.lead{color:var(--muted);margin:0;max-width:70ch}
+.steps{display:flex;flex-wrap:wrap;gap:8px 20px;margin:14px 0 0;padding:0;list-style:none;color:var(--muted);font-size:14px}
+.steps li{display:flex;gap:8px;align-items:baseline}
+.steps b{font-family:var(--mono);color:var(--accent);font-weight:500}
+main{max-width:1240px;margin:0 auto;padding:16px 20px 32px;display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:20px;align-items:start}
+@media (max-width:860px){main{grid-template-columns:1fr}}
+.card{background:var(--sheet);border:1px solid var(--line);border-radius:8px;padding:18px}
+.card + .card{margin-top:16px}
+h2{font-family:var(--display);font-size:16px;font-weight:600;margin:0 0 12px;display:flex;gap:8px;align-items:baseline}
+h2 .n{font-family:var(--mono);font-size:12px;color:var(--accent)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid .full{grid-column:1/-1}
+@media (max-width:480px){.grid{grid-template-columns:1fr}}
+label{display:block;font-size:13px;font-weight:500;margin-bottom:4px}
+.opt{color:var(--muted);font-weight:400}
+input[type=text],select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--sheet);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+textarea{resize:vertical;min-height:64px}
+input:focus,select:focus,textarea:focus,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.hint{font-size:12px;color:var(--muted);margin-top:4px}
+.seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{flex:1;margin:0;text-align:center;padding:8px 6px;cursor:pointer;font-weight:500;font-size:13px;border-right:1px solid var(--line)}
+.seg label:last-of-type{border-right:0}
+.seg input:checked + label{background:var(--ink);color:var(--paper)}
+.seg input:focus-visible + label{outline:2px solid var(--accent);outline-offset:-2px}
+.checks{display:grid;gap:8px}
+.checks label{display:flex;gap:8px;align-items:flex-start;font-weight:400;font-size:14px;margin:0;cursor:pointer}
+.checks input{margin-top:3px;accent-color:var(--accent)}
+details summary{cursor:pointer;font-family:var(--display);font-weight:600;font-size:16px;list-style:none;display:flex;gap:8px;align-items:baseline}
+details summary::-webkit-details-marker{display:none}
+details summary::after{content:"Editar";margin-left:auto;font-family:var(--body);font-size:12px;font-weight:500;color:var(--accent)}
+details[open] summary::after{content:"Ocultar"}
+details summary .n{font-family:var(--mono);font-size:12px;color:var(--accent)}
+details .grid{margin-top:12px}
+.folders{font-family:var(--mono);font-size:12px;color:var(--muted);margin:6px 0 0}
+.out{position:sticky;top:16px}
+.outhead{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px}
+.outhead h2{margin:0}
+.meta{font-family:var(--mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.btns{display:flex;gap:8px}
+button{font:inherit;font-weight:600;font-size:14px;border-radius:6px;padding:8px 16px;cursor:pointer;border:1px solid var(--line);background:var(--sheet);color:var(--ink)}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+button.primary.done{background:var(--ok);border-color:var(--ok);color:#fff}
+pre{margin:0;background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:16px;font-family:var(--mono);font-size:13px;line-height:1.6;white-space:pre-wrap;word-wrap:break-word;max-height:70vh;overflow:auto}
+.status{font-size:13px;color:var(--muted);margin-top:8px;min-height:1.5em}
+footer{max-width:1240px;margin:0 auto;padding:0 20px 32px;color:var(--muted);font-size:13px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Generador de prompts para documentación técnica</h1>
+  <p class="lead">Arma la instrucción para que un asistente de inteligencia artificial elabore un documento técnico a partir de las carpetas del proyecto. Sirve para cualquier empresa: los datos que tu empresa no use se dejan en blanco.</p>
+  <ul class="steps">
+    <li><b>1</b> Ordena las carpetas del proyecto</li>
+    <li><b>2</b> Completa los datos del documento</li>
+    <li><b>3</b> Copia el prompt y pégalo en tu asistente de IA con la carpeta conectada</li>
+  </ul>
+</header>
+
+<main>
+<form id="f" autocomplete="off">
+  <section class="card">
+    <h2><span class="n">01</span>Qué necesitas</h2>
+    <div class="seg" role="radiogroup" aria-label="Tipo de prompt">
+      <input type="radio" name="modo" id="m-doc" value="doc" checked><label for="m-doc">Prompt para un documento</label>
+      <input type="radio" name="modo" id="m-gen" value="gen"><label for="m-gen">Instrucciones generales</label>
+    </div>
+    <p class="hint" id="modoHint">Genera la instrucción completa para elaborar un documento.</p>
+  </section>
+
+  <section class="card" id="docCard">
+    <h2><span class="n">02</span>Documento</h2>
+    <div class="grid">
+      <div class="full">
+        <label for="tipo">Tipo de documento</label>
+        <select id="tipo"></select>
+      </div>
+      <div class="full" id="otroWrap" hidden>
+        <label for="otro">Nombre del documento</label>
+        <input type="text" id="otro" placeholder="Ej.: informe de compatibilización de planos">
+      </div>
+      <div class="full">
+        <label for="proyecto">Proyecto <span class="opt">(opcional)</span></label>
+        <input type="text" id="proyecto" placeholder="Ej.: Agua potable del caserío Santa Rosa">
+      </div>
+      <div class="full">
+        <label for="cliente">Cliente o entidad <span class="opt">(opcional)</span></label>
+        <input type="text" id="cliente" placeholder="Ej.: Municipalidad Distrital de Los Baños del Inca">
+      </div>
+      <div>
+        <label for="idTipo">Identificación del archivo</label>
+        <select id="idTipo">
+          <option value="none">Sin código</option>
+          <option value="codigo">Código del documento</option>
+          <option value="nombre">Nombre del archivo</option>
+        </select>
+      </div>
+      <div>
+        <label for="idValor">Código o nombre <span class="opt">(opcional)</span></label>
+        <input type="text" id="idValor" placeholder="Ej.: MD-001" disabled>
+      </div>
+      <div class="full">
+        <label for="version">Revisión o versión <span class="opt">(opcional)</span></label>
+        <input type="text" id="version" placeholder="Ej.: Rev. A o versión 2">
+      </div>
+      <div class="full">
+        <label for="norma">Normativa <span class="opt">(opcional)</span></label>
+        <input type="text" id="norma" placeholder="Ej.: RNE, Manual de Carreteras DG-2018">
+      </div>
+      <div class="full">
+        <label for="extra">Indicaciones adicionales <span class="opt">(opcional)</span></label>
+        <textarea id="extra" placeholder="Ej.: Elabora solo el capítulo de diagnóstico. Incluye un panel fotográfico al final."></textarea>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <details id="folderDetails">
+      <summary><span class="n">03</span>Carpetas del proyecto</summary>
+      <div class="grid">
+        <div class="full">
+          <label for="fRef">Formatos, guías y documentos anteriores</label>
+          <input type="text" id="fRef">
+        </div>
+        <div class="full">
+          <label for="fIns">Información del proyecto (insumos)</label>
+          <input type="text" id="fIns">
+        </div>
+        <div>
+          <label for="fEnt">Documentos generados</label>
+          <input type="text" id="fEnt">
+        </div>
+        <div>
+          <label for="fObs">Observaciones</label>
+          <input type="text" id="fObs">
+        </div>
+        <div class="full"><button type="button" id="resetFolders">Volver a los nombres sugeridos</button></div>
+      </div>
+      <p class="hint">Cambia los nombres si tu empresa usa otros. Este navegador los recuerda para la próxima vez.</p>
+    </details>
+    <p class="folders" id="folderSummary"></p>
+  </section>
+
+  <section class="card">
+    <h2><span class="n">04</span>Reglas que incluye el prompt</h2>
+    <div class="checks" id="rules"></div>
+  </section>
+</form>
+
+<aside class="out">
+  <section class="card">
+    <div class="outhead">
+      <h2><span class="n">05</span>Tu prompt</h2>
+      <span class="meta" id="meta"></span>
+    </div>
+    <pre id="prompt" aria-live="polite"></pre>
+    <div class="btns" style="margin-top:12px">
+      <button type="button" class="primary" id="copy">Copiar prompt</button>
+      <button type="button" id="clear">Limpiar datos</button>
+    </div>
+    <p class="status" id="status"></p>
+  </section>
+</aside>
+</main>
+
+<footer>
+  Herramienta gratuita. Funciona en tu navegador: no usa inteligencia artificial para armar el texto y no envía ni guarda los datos del documento.
+</footer>
+
+<script>
+/* ===== Datos: tipos de documento (formato tipo JSON) ===== */
+const TIPOS = [
+  { id:"md",   grupo:"Expediente técnico", nombre:"Memoria descriptiva", art:"la memoria descriptiva" },
+  { id:"et",   grupo:"Expediente técnico", nombre:"Especificaciones técnicas", art:"las especificaciones técnicas",
+    enfoque:"Obtén las partidas, sus unidades y su orden de la hoja de metrados de los insumos, y desarrolla cada partida con la estructura de la guía o del documento modelo." },
+  { id:"mc",   grupo:"Expediente técnico", nombre:"Memoria de cálculo", art:"la memoria de cálculo",
+    enfoque:"Presenta los resultados de los programas de diseño o de las hojas de cálculo tal como figuran en los insumos, en tablas, con sus verificaciones." },
+  { id:"it",   grupo:"Expediente técnico", nombre:"Informe topográfico", art:"el informe topográfico" },
+  { id:"ems",  grupo:"Expediente técnico", nombre:"Informe de estudio de suelos", art:"el informe de estudio de suelos",
+    enfoque:"Usa los resultados de los ensayos de laboratorio tal como figuran en los certificados de los insumos." },
+  { id:"fic",  grupo:"Preinversión", nombre:"Ficha técnica o estudio de preinversión", art:"la ficha técnica" },
+  { id:"diag", grupo:"Preinversión", nombre:"Informe de diagnóstico", art:"el informe de diagnóstico",
+    enfoque:"Cita la fuente de cada dato estadístico." },
+  { id:"inf",  grupo:"Obra y supervisión", nombre:"Informe técnico", art:"el informe técnico" },
+  { id:"av",   grupo:"Obra y supervisión", nombre:"Informe de avance o estado situacional", art:"el informe de avance" },
+  { id:"pt",   grupo:"Obra y supervisión", nombre:"Plan de trabajo", art:"el plan de trabajo" },
+  { id:"pets", grupo:"Seguridad (SSOMA)", nombre:"PETS o procedimiento de trabajo", art:"el procedimiento escrito de trabajo seguro (PETS)",
+    enfoque:"Respeta los cuadros de firmas y la codificación del formato del cliente." },
+  { id:"obs",  grupo:"Revisiones", nombre:"Levantamiento de observaciones", art:"", especial:"obs" },
+  { id:"otro", grupo:"Otro", nombre:"Otro documento", art:"" }
+];
+
+const CARPETAS_SUGERIDAS = { ref:"01_REFERENCIA", ins:"02_INSUMOS", ent:"04_ENTREGABLES", obs:"05_OBSERVACIONES" };
+
+const REGLAS = [
+  { id:"formato", texto:"Conservar el formato del cliente (estilos, encabezados, logotipos)" },
+  { id:"datos",   texto:"No inventar datos: lo que falte va en una lista aparte" },
+  { id:"calc",    texto:"No hacer cálculos de ingeniería: solo resultados de los insumos" },
+  { id:"redac",   texto:"Redacción técnica formal en tercera persona" },
+  { id:"fuentes", texto:"Al final, indicar de qué archivo salió cada dato" },
+  { id:"consulta",texto:"Preguntar antes de empezar si falta información esencial" }
+];
+
+/* ===== Utilidades ===== */
+const $ = id => document.getElementById(id);
+const store = {
+  get(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } },
+  set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+const v = id => $(id).value.trim();
+const rule = id => { const el = $("r-"+id); return el ? el.checked : true; };
+
+/* ===== Construcción de la interfaz ===== */
+(function build(){
+  const sel = $("tipo"); let grupo = null, og = null;
+  TIPOS.forEach(t => {
+    if (t.grupo !== grupo){ og = document.createElement("optgroup"); og.label = t.grupo; sel.appendChild(og); grupo = t.grupo; }
+    const o = document.createElement("option"); o.value = t.id; o.textContent = t.nombre; og.appendChild(o);
+  });
+  const box = $("rules");
+  REGLAS.forEach(r => {
+    const l = document.createElement("label");
+    l.innerHTML = '<input type="checkbox" id="r-'+r.id+'" checked> <span>'+r.texto+'</span>';
+    box.appendChild(l);
+  });
+  const saved = store.get("gp-carpetas") || {};
+  $("fRef").value = saved.ref || CARPETAS_SUGERIDAS.ref;
+  $("fIns").value = saved.ins || CARPETAS_SUGERIDAS.ins;
+  $("fEnt").value = saved.ent || CARPETAS_SUGERIDAS.ent;
+  $("fObs").value = saved.obs || CARPETAS_SUGERIDAS.obs;
+})();
+
+/* ===== Generación del texto ===== */
+function carpetas(){
+  return {
+    ref: v("fRef") || CARPETAS_SUGERIDAS.ref, ins: v("fIns") || CARPETAS_SUGERIDAS.ins,
+    ent: v("fEnt") || CARPETAS_SUGERIDAS.ent, obs: v("fObs") || CARPETAS_SUGERIDAS.obs
+  };
+}
+
+function nombreDoc(t){
+  if (t.id === "otro"){ const o = v("otro"); return o ? "el documento “" + o + "”" : "el documento"; }
+  return t.art;
+}
+
+function identificacion(){
+  const tipo = $("idTipo").value, val = v("idValor");
+  if (tipo === "none" || !val) return null;
+  return { tipo, val };
+}
+
+function reglasDoc(C, conObs){
+  const p = [];
+  if (rule("redac")) p.push("Redacta en tercera persona, con lenguaje técnico formal, y usa las unidades y la nomenclatura de los planos y cálculos.");
+  if (rule("calc")) p.push("No realices cálculos de ingeniería: usa solo los resultados que están en los insumos.");
+  if (rule("datos")) p.push("Si algún dato necesario no está en los insumos, no lo inventes: anótalo en una lista aparte para su revisión y no dejes notas pendientes dentro del documento.");
+  if (rule("consulta")) p.push("Si falta información esencial para empezar, pregúntame antes de elaborar el documento.");
+  return p;
+}
+
+function promptDocumento(){
+  const C = carpetas();
+  const t = TIPOS.find(x => x.id === $("tipo").value);
+  const proyecto = v("proyecto"), cliente = v("cliente"), version = v("version"), norma = v("norma"), extra = v("extra");
+  const id = identificacion();
+  const P = [];
+
+  if (t.especial === "obs"){
+    let s = "Levanta las observaciones al documento";
+    if (id) s += " " + id.val;
+    if (proyecto) s += " del proyecto " + proyecto;
+    if (cliente) s += ", elaborado para " + cliente;
+    s += ".";
+    P.push(s);
+    P.push("Las observaciones están en la carpeta " + C.obs + " y el documento observado está en la carpeta " + C.ent + ". Corrige el documento editando el mismo archivo" + (rule("formato") ? ", sin cambiar estilos, encabezados, pies de página ni logotipos," : "") + " y cambia únicamente lo que piden las observaciones.");
+    P.push("Usa solo información de la carpeta " + C.ins + " para corregir.");
+    P.push("Guarda el documento corregido como " + (version ? "la revisión o versión " + version : "una nueva versión") + " en la carpeta " + C.ent + ".");
+    P.push("Elabora también una matriz de levantamiento de observaciones con: número, observación tal como la escribió el evaluador, respuesta, y página o sección donde se corrigió.");
+    if (rule("datos")) P.push("Si una observación no se puede levantar con los insumos disponibles, no inventes la respuesta: anótala en una lista aparte e indica qué información falta.");
+    if (rule("redac")) P.push("Redacta las respuestas en tercera persona, con lenguaje técnico formal.");
+    if (extra) P.push(extra);
+    return P.join("\n\n");
+  }
+
+  let s = "Elabora " + nombreDoc(t);
+  if (proyecto) s += " del proyecto " + proyecto;
+  if (cliente) s += ", para " + cliente;
+  if (id) s += (id.tipo === "codigo" ? ", con el código " : ", con el nombre de archivo ") + id.val;
+  if (version) s += (id ? " y " : ", con ") + "la revisión o versión " + version;
+  s += ".";
+  P.push(s);
+
+  P.push("Revisa el contenido de la carpeta " + C.ref + ", donde están los formatos, las guías y los documentos anteriores, y el de la carpeta " + C.ins + ", donde está la información del proyecto. Identifica los insumos que corresponden a este documento.");
+
+  if (rule("formato")) P.push("Elabora el documento sobre el formato o la plantilla de la carpeta " + C.ref + ", editando el archivo, sin cambiar estilos, encabezados, pies de página ni logotipos. Toma la estructura, el orden de las secciones y el estilo de redacción de las guías y de los documentos anteriores, sin copiar sus datos.");
+  else P.push("Toma la estructura, el orden de las secciones y el estilo de redacción de las guías y de los documentos anteriores de la carpeta " + C.ref + ", sin copiar sus datos.");
+
+  if (t.enfoque) P.push(t.enfoque);
+  P.push("Obtén los datos técnicos únicamente de la carpeta " + C.ins + ".");
+  P.push(norma ? "Aplica la normativa siguiente: " + norma + "." : "Aplica la normativa vigente que corresponda al tipo de documento y al cliente.");
+  P.push(...reglasDoc(C));
+  if (extra) P.push(extra);
+
+  let g = "Guarda el resultado en la carpeta " + C.ent;
+  if (id && id.tipo === "nombre") g += " con el nombre " + id.val + (version ? " " + version : "");
+  else if (id) g += " con el nombre " + id.val + (version ? "_" + version.replace(/\s+/g,"") : "");
+  g += ".";
+  if (rule("fuentes")) g += " Al finalizar, indica por sección de qué archivo obtuviste la información y qué datos faltaron.";
+  P.push(g);
+  return P.join("\n\n");
+}
+
+function promptGeneral(){
+  const C = carpetas();
+  const L = [];
+  L.push("INSTRUCCIONES GENERALES PARA LA ELABORACIÓN DE DOCUMENTACIÓN TÉCNICA");
+  L.push("");
+  L.push("Rol: asistente de oficina técnica en la elaboración de documentación de proyectos de ingeniería.");
+  L.push("");
+  L.push("Carpetas de cada proyecto:");
+  L.push(C.ref + ": formatos o plantillas del cliente, guías, términos de referencia y documentos anteriores.");
+  L.push(C.ins + ": información técnica del proyecto (planos, cálculos, metrados, fotografías, tablas exportadas y datos de campo).");
+  L.push(C.ent + ": documentos generados.");
+  L.push(C.obs + ": observaciones del cliente o de la entidad evaluadora.");
+  L.push("");
+  L.push("Al recibir la indicación de elaborar un documento:");
+  const r = [];
+  r.push("Revisar el contenido de las carpetas e identificar los insumos aplicables al documento solicitado.");
+  if (rule("formato")) r.push("Elaborar el documento sobre el formato de " + C.ref + ", editando el archivo y conservando estilos, encabezados, pies de página y logotipos.");
+  r.push("Tomar la estructura, el orden de las secciones y el estilo de redacción de las guías y de los documentos anteriores, sin copiar sus datos.");
+  r.push("Obtener los datos técnicos exclusivamente de " + C.ins + ".");
+  r.push("Aplicar la normativa vigente que corresponda al tipo de documento y al cliente.");
+  r.push("Si la empresa utiliza código, nombre de archivo o número de revisión, usar los indicados o los que figuren en los insumos; si no los utiliza, omitirlos.");
+  if (rule("redac")) r.push("Redactar en tercera persona, con lenguaje técnico formal, y usar las unidades y la nomenclatura de los planos y cálculos.");
+  if (rule("calc")) r.push("No efectuar cálculos de ingeniería; utilizar únicamente los resultados de los insumos.");
+  if (rule("datos")) r.push("No inventar ni suponer datos. Registrar la información faltante en una lista aparte, sin dejar notas pendientes dentro del documento.");
+  if (rule("consulta")) r.push("Si falta información esencial, consultar antes de iniciar.");
+  r.push("Guardar el documento en " + C.ent + ".");
+  if (rule("fuentes")) r.push("Al finalizar, informar por sección de qué archivo se obtuvo la información y qué datos faltaron.");
+  r.push("En el levantamiento de observaciones, tomarlas de " + C.obs + ", corregir solo lo observado, guardar el documento como nueva versión y elaborar la matriz de levantamiento de observaciones.");
+  r.forEach((x,i) => L.push((i+1) + ". " + x));
+  return L.join("\n");
+}
+
+/* ===== Actualización en vivo ===== */
+function render(){
+  const modo = document.querySelector('input[name=modo]:checked').value;
+  $("docCard").hidden = (modo === "gen");
+  $("modoHint").textContent = modo === "gen"
+    ? "Texto para guardar una sola vez (en las instrucciones del proyecto de tu asistente). Después solo das la orden corta, por ejemplo: “Elabora la memoria descriptiva”."
+    : "Genera la instrucción completa para elaborar un documento.";
+  $("otroWrap").hidden = $("tipo").value !== "otro";
+  $("idValor").disabled = $("idTipo").value === "none";
+  const C = carpetas();
+  $("folderSummary").textContent = [C.ref, C.ins, C.ent, C.obs].join("  ·  ");
+  const txt = modo === "gen" ? promptGeneral() : promptDocumento();
+  $("prompt").textContent = txt;
+  const words = txt.split(/\s+/).filter(Boolean).length;
+  $("meta").textContent = words + " palabras";
+  store.set("gp-carpetas", { ref:v("fRef"), ins:v("fIns"), ent:v("fEnt"), obs:v("fObs") });
+}
+
+$("f").addEventListener("input", render);
+$("f").addEventListener("change", render);
+$("f").addEventListener("submit", e => e.preventDefault());
+
+$("resetFolders").addEventListener("click", () => {
+  $("fRef").value = CARPETAS_SUGERIDAS.ref; $("fIns").value = CARPETAS_SUGERIDAS.ins;
+  $("fEnt").value = CARPETAS_SUGERIDAS.ent; $("fObs").value = CARPETAS_SUGERIDAS.obs; render();
+});
+
+$("clear").addEventListener("click", () => {
+  ["proyecto","cliente","idValor","version","norma","extra","otro"].forEach(id => $(id).value = "");
+  $("idTipo").value = "none"; render();
+  $("status").textContent = "Datos borrados. Las carpetas y las reglas se mantienen.";
+});
+
+$("copy").addEventListener("click", async () => {
+  const btn = $("copy"), txt = $("prompt").textContent;
+  try {
+    await navigator.clipboard.writeText(txt);
+    btn.textContent = "Copiado"; btn.classList.add("done");
+    $("status").textContent = "Pégalo en tu asistente de IA con la carpeta del proyecto conectada.";
+  } catch(e) {
+    const range = document.createRange(); range.selectNodeContents($("prompt"));
+    const s = window.getSelection(); s.removeAllRanges(); s.addRange(range);
+    $("status").textContent = "No se pudo copiar automáticamente. El texto quedó seleccionado: usa Ctrl+C.";
+  }
+  setTimeout(() => { btn.textContent = "Copiar prompt"; btn.classList.remove("done"); }, 1800);
+});
+
+render();
+</script>
+</body>
+</html>
